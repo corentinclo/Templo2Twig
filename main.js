@@ -17,11 +17,12 @@ const FOREACH_TEMPLO_REGEX = /(::foreach\s)(.*)(\s)(.*)(::)/g;
 const RAW_TEMPLO_REGEX = /(::raw\s)(.*)(::)/g;
 const FILL_TEMPLO_REGEX = /(::fill\s)(.*)(::)/g;
 const SET_TEMPLO_REGEX = /(::set\s)(.*)(::)/g;
-const USE_TEMPLO_REGEX = /(::use\s)(.*)(::)/g;
+const USE_TEMPLO_REGEX = /(::use\s)(.*)(::)/;
 const PRINT_TEMPLO_REGEX = /(::)(.*)(::)/g;
-const MACRO_TEMPLO_REGEX = /(\$\$)(\w+)(\(.*\))/g;
+const MACRO_USAGE_TEMPLO_REGEX = /(\$\$)(\w+)(\(.*\))/g;
+const MACRO_ATTR_TEMPLO_REGEX = /(<\w+\s)(\$\$)(\w+)(\(.*\))(.*>)/g
 const COND_TEMPLO_REGEX = /(::cond\s)(.*)(::)/g;
-const NOT_TEMPLO_REGEX = /(.*)(!)(.*)/g;
+const NOT_TEMPLO_REGEX = /(.*)(!)([^=].*)/g;
 const AND_TEMPLO_REGEX = /(.*)(&&)(.*)/g;
 const OR_TEMPLO_REGEX = /(.*)(\|\|)(.*)/g;
 const MACRO_START_TAG_TEMPLO = /<macro name=\"(.+)\">/g;
@@ -38,12 +39,14 @@ const BLOCK = "block";
 // String templates
 const TEMPLATE_MACRO = "TEMPLATE_MACRO_";
 const TEMPLATE_COND = "TEMPLATE_COND_";
+const TEMPLATE_USE = "TEMPLATE_USE";
 
 // States
 let currentStatement = undefined;
 let macrosAreImported = false;
 const templateMacroAttributes = [];
 const templateCondAttributes = [];
+let templateUseFileName = "";
 
 /*
  * 
@@ -88,10 +91,6 @@ const convertToTwig = (node) => {
 		else if (SET_TEMPLO_REGEX.test(node.nodeValue)) {
 			node.nodeValue = convertSet(node.nodeValue);
 			currentStatement = SET;
-		}
-		else if (USE_TEMPLO_REGEX.test(node.nodeValue)) {
-			convertUse(node);
-			currentStatement = BLOCK;
 		}
 		else if (PRINT_TEMPLO_REGEX.test(node.nodeValue)) {
 			node.nodeValue = convertPrint(node.nodeValue);
@@ -151,8 +150,10 @@ const convertCondAttribute = (node, condAttribute, condition) => {
 const preConvertAttributes = (fileAsString) => {
 	/* MACRO */
 
-	const macroConvertedTwig = "{{ macros.$2$3 }}";
-	fileAsString = fileAsString.replace(MACRO_TEMPLO_REGEX, macroConvertedTwig);
+	const macroAttrConvertedTwig = "$1{{ macros.$3$4 }}$5";
+	const macroUsageConvertedTwig = "<div macro> {{ macros.$2$3 }} </div>";
+	fileAsString = fileAsString.replace(MACRO_ATTR_TEMPLO_REGEX, macroAttrConvertedTwig);
+	fileAsString = fileAsString.replace(MACRO_USAGE_TEMPLO_REGEX, macroUsageConvertedTwig);
 
 	// Get and store the converted Twig macro attribute
 	const matches = fileAsString.match(/(<.*){{.*}}(.*>)/g);
@@ -188,6 +189,19 @@ const preConvertAttributes = (fileAsString) => {
 		fileAsString = fileAsString.replace(/(<.*){{.*}}(.*>)/, `$1${TEMPLATE_COND}${i}='${TEMPLATE_COND}${i}'$2`);
 	})
 
+	/* :use */
+
+	// Get and store the converted Twig cond attribute
+	const useMatch = fileAsString.match(USE_TEMPLO_REGEX);
+	templateUseFileName = useMatch && useMatch[2];
+	
+	// Replace the Twig use attribute by a template string in an HTML tag
+	const useTemplateString = `<html ${TEMPLATE_USE}='${TEMPLATE_USE}'>`;
+	fileAsString = fileAsString.replace(USE_TEMPLO_REGEX, useTemplateString);
+	const lastEndTemploDirective = fileAsString.match(/::end::(?![\s\S]*::end::)/);
+	fileAsString = fileAsString.replace(/::end::(?![\s\S]*::end::)/, '</html>')
+
+console.log(fileAsString)
 	return fileAsString;
 }
 
@@ -258,20 +272,23 @@ const convertSet = (value) => {
 	return value.replace(SET_TEMPLO_REGEX, replacedTwigRegex);
 }
 
-const convertUse = (node) => {
-	const replacedTwigRegex = "{% extends $2 %}";
-	node.nodeValue = node.nodeValue.replace(USE_TEMPLO_REGEX, replacedTwigRegex);
-
-	// Change file extension
-	node.nodeValue = node.nodeValue.replace(".mtt", ".twig");
-
-	const twigBlockNode = doc.createTextNode("{% block content %}\n");
-	node.parentNode.insertBefore(twigBlockNode, node.nextSibling);
-}
-
 const convertPrint = (value) => {
 	const replacedTwigRegex = "{{$2}}";
 	return value.replace(PRINT_TEMPLO_REGEX, replacedTwigRegex);
+}
+
+/*
+ * 
+ * Extends
+ *
+ */
+
+const fillInUseTemplate = (fileAsString) => {
+	const twigFileName = templateUseFileName.replace(".mtt", ".twig");
+	const replacedTwigExtends = `{% extends ${twigFileName} %}\n{% block content %}`
+	fileAsString = fileAsString.replace(`<html ${TEMPLATE_USE}="${TEMPLATE_USE}" xmlns="http://www.w3.org/1999/xhtml">`, replacedTwigExtends); 
+	fileAsString = fileAsString.replace('</html>', '{% endblock %}')
+	return fileAsString
 }
 
 /*
@@ -283,7 +300,13 @@ const convertPrint = (value) => {
 const importMacros = (node) => {
 	const importMacrosNode = doc.createTextNode("\n{% import 'macros.html' as macros %}")
 	const body = node.ownerDocument.getElementsByTagName("body")[0];
-	body.insertBefore(importMacrosNode, body.firstChild);
+	if (!body) {
+		const firstChild = node.ownerDocument.firstChild;
+		firstChild.insertBefore(importMacrosNode, firstChild.firstChild);
+	} else {
+		body.insertBefore(importMacrosNode, body.firstChild);
+	}
+	
 	macrosAreImported = true;
 }
 
@@ -296,6 +319,11 @@ const fillInTwigMacro = (value) => {
 const removeTwigMacroAttributeValues = (string) => {
 	const stringToBeRemoved ='="TEMPLATE_MACRO_ATTRIBUTE"';
 	return string.replace(stringToBeRemoved, '');
+}
+
+const removeDivAroundMacroUsage = (string) => {
+	const divAroundMacroUsageRegex = /<div\smacro="macro">\s({{\smacros.insert(.*)\s}})\s<\/div>/g;
+	return string.replace(divAroundMacroUsageRegex, '$1');
 }
 
 const convertMacroDefinitions = (fileAsString) => {
@@ -321,8 +349,8 @@ const main = () => {
 
 	if (fileAsString.startsWith("<macros>")) {
 		fileAsString = convertMacroDefinitions(fileAsString);
-	} else {
 
+	} else {
 		// Because the DOM parser won't recognize Templo attributes such as macros and ::cond, it will ignore them during the parsing.
 		// That's why we need to convert them into a template string before to start the DOM parsing. Then the DOM parsing will properly
 		// Recognize the template string which we'll be able to convert to Twig.
@@ -335,10 +363,16 @@ const main = () => {
 
 	// Convert Document back to string
 	const serializer = new XMLSerializer();
-	let string = serializer.serializeToString(doc);
+	fileAsString = serializer.serializeToString(doc);
 
 	// Remove Twig macro attributes
-	fileAsString = removeTwigMacroAttributeValues(string);
+	fileAsString = removeTwigMacroAttributeValues(fileAsString);
+
+	// Remove div around macro usage that we added earlier 
+	fileAsString = removeDivAroundMacroUsage(fileAsString);
+
+	// Fill in use/extends template string
+	fileAsString = fillInUseTemplate(fileAsString);
 
 	// The DOM parser will add the xml namespace to the document but we don't want it.
 	fileAsString = fileAsString.replace('xmlns="http://www.w3.org/1999/xhtml"', '');
@@ -346,28 +380,15 @@ const main = () => {
 	console.log(fileAsString);
 }
 
-// JS
-const client = new XMLHttpRequest();
-client.open('GET', '/file.templo');
-client.onreadystatechange = function(e) {
-	if (e.currentTarget.readyState !== 4) {
-		return
-	}
-  fileAsString = client.responseText;
-
-  main()
+fileAsString = bufferFile('/file.templo');
+function bufferFile(relPath) {
+    return fs.readFileSync(path.join(__dirname, relPath), { encoding: 'utf8' });
 }
-client.send();
 
-// fileAsString = bufferFile('/file.templo');
-// function bufferFile(relPath) {
-//     return fs.readFileSync(path.join(__dirname, relPath), { encoding: 'utf8' });
-// }
+main();
 
-// main();
-
-// fs.writeFile('./twig/file.twig', fileAsString, (err) => {
-//   if (err) throw err;
-//   console.log('The file has been saved!');
-// });
+fs.writeFile('./twig/file.twig', fileAsString, (err) => {
+  if (err) throw err;
+  console.log('The file has been saved!');
+});
 
