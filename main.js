@@ -12,7 +12,7 @@ const path = require('path');
 const IF_TEMPLO_REGEX = /(::if\s)(.*)(::)/g;
 const ELSEIF_TEMPLO_REGEX = /(::elseif\s)(.*)(::)/g;
 const ELSE_TEMPLO_REGEX = /::else::/g;
-const END_TEMPLO_REGEX = /::end::/g;
+const END_TEMPLO_REGEX = /::end::/;
 const FOREACH_TEMPLO_REGEX = /(::foreach\s)(.*)(\s)(.*)(::)/g;
 const RAW_TEMPLO_REGEX = /(::raw\s)(.*)(::)/g;
 const FILL_TEMPLO_REGEX = /(::fill\s)(.*)(::)/g;
@@ -42,7 +42,7 @@ const TEMPLATE_COND = "TEMPLATE_COND_";
 const TEMPLATE_USE = "TEMPLATE_USE";
 
 // States
-let currentStatement = undefined;
+let previousStatement = [];
 let macrosAreImported = false;
 const templateMacroAttributes = [];
 const templateCondAttributes = [];
@@ -66,7 +66,7 @@ const convertToTwig = (node) => {
 	if (node.nodeName === '#text') {
 		if (IF_TEMPLO_REGEX.test(node.nodeValue)) {
 			convertIf(node);
-			currentStatement = IF;
+			previousStatement.push(IF);
 		}
 		else if (ELSEIF_TEMPLO_REGEX.test(node.nodeValue)) {
 			node.nodeValue = convertElseIf(node.nodeValue);
@@ -77,25 +77,25 @@ const convertToTwig = (node) => {
 		else if (END_TEMPLO_REGEX.test(node.nodeValue)) {
 			node.nodeValue = convertEnd(node.nodeValue);
 		}
-		else if (FOREACH_TEMPLO_REGEX.test(node.nodeValue)) {
+		if (FOREACH_TEMPLO_REGEX.test(node.nodeValue)) {
 			node.nodeValue = convertForeach(node.nodeValue);
-			currentStatement = FOR;
+			previousStatement.push(FOR);
 		}
-		else if (RAW_TEMPLO_REGEX.test(node.nodeValue)) {
+		if (RAW_TEMPLO_REGEX.test(node.nodeValue)) {
 			node.nodeValue = convertRaw(node.nodeValue);
 		}
-		else if (FILL_TEMPLO_REGEX.test(node.nodeValue)) {
+		if (FILL_TEMPLO_REGEX.test(node.nodeValue)) {
 			node.nodeValue = convertFill(node.nodeValue);
-			currentStatement = SET;
+			previousStatement.push(SET);
 		}
-		else if (SET_TEMPLO_REGEX.test(node.nodeValue)) {
+		if (SET_TEMPLO_REGEX.test(node.nodeValue)) {
 			node.nodeValue = convertSet(node.nodeValue);
-			currentStatement = SET;
+			previousStatement.push(SET);
 		}
-		else if (PRINT_TEMPLO_REGEX.test(node.nodeValue)) {
+		if (PRINT_TEMPLO_REGEX.test(node.nodeValue)) {
 			node.nodeValue = convertPrint(node.nodeValue);
 		}
-		else if (node.nodeValue.includes(TEMPLATE_MACRO)) {
+		if (node.nodeValue.includes(TEMPLATE_MACRO)) {
 			node.nodeValue = fillInTwigMacro(node.nodeValue);
 		}
 	} else if (node.childNodes) {
@@ -247,9 +247,13 @@ const convertElse = (value) => {
 }
 
 const convertEnd = (value) => {
-	const endTwig = `{% end${currentStatement} %}`;
-	currentStatement = undefined;
-	return value.replace(END_TEMPLO_REGEX, endTwig);
+	let converted = value;
+	let endTwig = "";
+	while(converted.match(END_TEMPLO_REGEX)) {
+		let endTwig = `{% end${previousStatement.pop()} %}`;
+		converted = converted.replace(END_TEMPLO_REGEX, endTwig);
+	}
+	return converted;
 }
 
 const convertForeach = (value) => {
@@ -284,6 +288,9 @@ const convertPrint = (value) => {
  */
 
 const fillInUseTemplate = (fileAsString) => {
+	if (!templateUseFileName) {
+		return fileAsString
+	}
 	const twigFileName = templateUseFileName.replace(".mtt", ".twig");
 	const replacedTwigExtends = `{% extends ${twigFileName} %}\n{% block content %}`
 	fileAsString = fileAsString.replace(`<html ${TEMPLATE_USE}="${TEMPLATE_USE}" xmlns="http://www.w3.org/1999/xhtml">`, replacedTwigExtends); 
@@ -375,20 +382,33 @@ const main = () => {
 	fileAsString = fillInUseTemplate(fileAsString);
 
 	// The DOM parser will add the xml namespace to the document but we don't want it.
-	fileAsString = fileAsString.replace('xmlns="http://www.w3.org/1999/xhtml"', '');
+	fileAsString = fileAsString.replace(' xmlns="http://www.w3.org/1999/xhtml"', '');
 
 	console.log(fileAsString);
 }
 
-fileAsString = bufferFile('/file.templo');
-function bufferFile(relPath) {
-    return fs.readFileSync(path.join(__dirname, relPath), { encoding: 'utf8' });
+// JS
+const client = new XMLHttpRequest();
+client.open('GET', '/t.templo');
+client.onreadystatechange = function(e) {
+	if (e.currentTarget.readyState !== 4) {
+		return
+	}
+  fileAsString = client.responseText;
+
+  main()
 }
+client.send();
 
-main();
+// fileAsString = bufferFile('/file.templo');
+// function bufferFile(relPath) {
+//     return fs.readFileSync(path.join(__dirname, relPath), { encoding: 'utf8' });
+// }
 
-fs.writeFile('./twig/file.twig', fileAsString, (err) => {
-  if (err) throw err;
-  console.log('The file has been saved!');
-});
+// main();
+
+// fs.writeFile('./twig/file.twig', fileAsString, (err) => {
+//   if (err) throw err;
+//   console.log('The file has been saved!');
+// });
 
