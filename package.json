@@ -1,13 +1,12 @@
 {
   "name": "templo2twig",
-  "author": "Corentin Cloarec",
+  "author": "",
   "version": "1.0.0",
   "description": "Convert files from Templo to Twig template engine.",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
-  "author": "",
   "license": "ISC",
   "dependencies": {
     "xmldom": "^0.2.1"

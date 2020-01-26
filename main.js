@@ -24,6 +24,10 @@ const COND_TEMPLO_REGEX = /(::cond\s)(.*)(::)/g;
 const NOT_TEMPLO_REGEX = /(.*)(!)(.*)/g;
 const AND_TEMPLO_REGEX = /(.*)(&&)(.*)/g;
 const OR_TEMPLO_REGEX = /(.*)(\|\|)(.*)/g;
+const MACRO_START_TAG_TEMPLO = /<macro name=\"(.+)\">/g;
+const MACRO_END_TAG_TEMPLO = /<\/macro>/g;
+const MACROS_START_TAG_TEMPLO = /<macros>/;
+const MACROS_END_TAG_TEMPLO = /<\/macros>/;
 
 // Statement constants
 const IF = "if";
@@ -31,16 +35,12 @@ const FOR = "for";
 const SET = "set";
 const BLOCK = "block";
 
-// Macros definitions
-const MACROS_NODE_NAME = "macros";
-const MACRO_NODE_NAME = "macro";
-
+// String templates
 const TEMPLATE_MACRO = "TEMPLATE_MACRO_";
 const TEMPLATE_COND = "TEMPLATE_COND_";
 
 // States
 let currentStatement = undefined;
-let currentFileIsDocument = false;
 let macrosAreImported = false;
 const templateMacroAttributes = [];
 const templateCondAttributes = [];
@@ -54,11 +54,6 @@ const templateCondAttributes = [];
 const convertToTwig = (node) => {
 	if (!node) {
 		return
-	}
-
-	if (node.nodeName.toLowerCase() === MACROS_NODE_NAME) {
-		convertMacrosDefinitions(node)
-		return node;
 	}
 
 	if (node.attributes) {
@@ -292,62 +287,6 @@ const importMacros = (node) => {
 	macrosAreImported = true;
 }
 
-const convertMacro = (value) => {
-	let converted = "{{ macros.$2(";
-	// Convert macro's parameters
-	const parameters = value.match(/::\w+::/g);
-	if (parameters) {
-		for (let i = 0 ; i < parameters.length ; i++) {
-			converted += convertPrint(parameters[i]);
-			if (i !== parameters.length - 1) {
-				converted += ", "
-			}
-		}
-	}
-	converted += ") }}";
-	return value.replace(MACRO_TEMPLO_REGEX, converted);
-}
-
-const convertMacrosDefinitions = (node) => {
-	//while (node.childNodes.length) {
-		node.childNodes = Array.from(node.childNodes).map(childNode => {
-			if (childNode.nodeName === MACRO_NODE_NAME) {
-				childNode = convertMacroDefinitions(childNode);
-			}
-			return childNode
-		})
-		// let childNode = node.firstChild;
-		// if (childNode.nodeName === MACRO_NODE_NAME) {
-		// 	childNode = convertMacroDefinitions(childNode);
-		// }
-		// if (childNode) {
-		// 			node.parentNode.appendChild(childNode);
-
-		// 		}else {
-			// console.log("childNode", childNode)
-		// 		}
-	//}
-	//node.remove();
-}
-
-const convertMacroDefinitions = (node) => {
-	const attributes = node.attributes;
-	const nameAttribute = attributes.getNamedItem("name");
-	const macroName = nameAttribute && nameAttribute.value;
-	const twigMacroNode = doc.createTextNode(`{% macro ${macroName} %}`);
-	let lastMacroChildNode = undefined;
-	const nodeSibling =  node.nextSibling;
-	while (node.childNodes.length) { 
-		lastMacroChildNode = node.firstChild;
-		convertToTwig(lastMacroChildNode);
-		node.parentNode.insertBefore(lastMacroChildNode, nodeSibling);
-	}
-	const twigEndMacroNode = doc.createTextNode('{% endmacro %}');
-	lastMacroChildNode && node.parentNode.insertBefore(twigEndMacroNode, lastMacroChildNode.nextSibling);
-	node.remove && node.remove();
-	return twigMacroNode;
-}
-
 const fillInTwigMacro = (value) => {
 	const firstSubstring = value.substring(value.indexOf(TEMPLATE_MACRO) + TEMPLATE_MACRO.length);
 	const position = firstSubstring.substring(0, firstSubstring.indexOf('='));
@@ -357,6 +296,16 @@ const fillInTwigMacro = (value) => {
 const removeTwigMacroAttributeValues = (string) => {
 	const stringToBeRemoved ='="TEMPLATE_MACRO_ATTRIBUTE"';
 	return string.replace(stringToBeRemoved, '');
+}
+
+const convertMacroDefinitions = (fileAsString) => {
+	fileAsString = fileAsString.replace(MACRO_START_TAG_TEMPLO, "{% macro $1 %}")
+	fileAsString = fileAsString.replace(MACRO_END_TAG_TEMPLO, "{% endmacro %}")
+	fileAsString = fileAsString.replace(MACROS_START_TAG_TEMPLO, "")
+	fileAsString = fileAsString.replace(MACROS_END_TAG_TEMPLO, "")
+	fileAsString = convertPrint(fileAsString)
+
+	return fileAsString;
 }
 
 /*
@@ -370,41 +319,55 @@ let doc;
 
 const main = () => {
 
-	// Because the DOM parser won't recognize Templo attributes such as macros and ::cond, it will ignore them during the parsing.
-	// That's why we need to convert them into a template string before to start the DOM parsing. Then the DOM parsing will properly
-	// Recognize the template string which we'll be able to convert to Twig.
-	fileAsString = preConvertAttributes(fileAsString);
+	if (fileAsString.startsWith("<macros>")) {
+		fileAsString = convertMacroDefinitions(fileAsString);
+	} else {
 
-	doc = parser.parseFromString(fileAsString, "text/html");
+		// Because the DOM parser won't recognize Templo attributes such as macros and ::cond, it will ignore them during the parsing.
+		// That's why we need to convert them into a template string before to start the DOM parsing. Then the DOM parsing will properly
+		// Recognize the template string which we'll be able to convert to Twig.
+		fileAsString = preConvertAttributes(fileAsString);
 
-	if (fileAsString.startsWith("<html")) {
-		currentFileIsDocument = true;
+		doc = parser.parseFromString(fileAsString, "text/html");
+
+		doc.childNodes = Array.from(doc.childNodes).map(convertToTwig);
 	}
-
-	doc.childNodes = Array.from(doc.childNodes).map(convertToTwig);
 
 	// Convert Document back to string
 	const serializer = new XMLSerializer();
 	let string = serializer.serializeToString(doc);
-	if (currentFileIsDocument) {
-		// Remove Twig macro attributes
-		fileAsString = removeTwigMacroAttributeValues(string);	
-	} else {
-		fileAsString = fileAsString.replace('xmlns="http://www.w3.org/1999/xhtml"', '');
-	}
+
+	// Remove Twig macro attributes
+	fileAsString = removeTwigMacroAttributeValues(string);
+
+	// The DOM parser will add the xml namespace to the document but we don't want it.
+	fileAsString = fileAsString.replace('xmlns="http://www.w3.org/1999/xhtml"', '');
 
 	console.log(fileAsString);
 }
 
-fileAsString = bufferFile('/file.templo');
-function bufferFile(relPath) {
-    return fs.readFileSync(path.join(__dirname, relPath), { encoding: 'utf8' });
+// JS
+const client = new XMLHttpRequest();
+client.open('GET', '/file.templo');
+client.onreadystatechange = function(e) {
+	if (e.currentTarget.readyState !== 4) {
+		return
+	}
+  fileAsString = client.responseText;
+
+  main()
 }
+client.send();
 
-main();
+// fileAsString = bufferFile('/file.templo');
+// function bufferFile(relPath) {
+//     return fs.readFileSync(path.join(__dirname, relPath), { encoding: 'utf8' });
+// }
 
-fs.writeFile('./twig/file.twig', fileAsString, (err) => {
-  if (err) throw err;
-  console.log('The file has been saved!');
-});
+// main();
+
+// fs.writeFile('./twig/file.twig', fileAsString, (err) => {
+//   if (err) throw err;
+//   console.log('The file has been saved!');
+// });
 
