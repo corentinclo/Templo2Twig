@@ -22,7 +22,9 @@ const PRINT_TEMPLO_REGEX = /(::)(.*)(::)/g;
 const MACRO_USAGE_TEMPLO_REGEX = /(\$\$)(\w+)(\(.*\))/g;
 const MACRO_ATTR_TEMPLO_REGEX = /(<\w+\s)(\$\$)(\w+)(\(.*\))(.*>)/g
 const COND_TEMPLO_REGEX = /(::cond\s)(.*)(::)/g;
-const ATTR_CLASS_TEMPLO_REGEX = /::attr\sclass\sif\((.*)\)\s+(.*)(::)/g;
+const ATTR_CLASS_TEMPLO_REGEX = /::attr\sclass\sif\((.*)\)\s+(.*)(::>)/g;
+const ATTR_CHECKED_TEMPLO_REGEX = /::attr\schecked\s\((.*)\)::/g;
+const ATTR_SELECTED_TEMPLO_REGEX = /::attr\sselected\s\((.*)\)::/g;
 const NOT_TEMPLO_REGEX = /(.*)(!)([^=].*)/g;
 const AND_TEMPLO_REGEX = /(.*)(&&)(.*)/g;
 const OR_TEMPLO_REGEX = /(.*)(\|\|)(.*)/g;
@@ -42,6 +44,8 @@ const TEMPLATE_MACRO = "TEMPLATE_MACRO_";
 const TEMPLATE_COND = "TEMPLATE_COND_";
 const TEMPLATE_USE = "TEMPLATE_USE";
 const TEMPLATE_ATTR_CLASS = "TEMPLATE_ATTR_CLASS_";
+const TEMPLATE_ATTR_CHECKED = "TEMPLATE_ATTR_CHECKED_";
+const TEMPLATE_ATTR_SELECTED = "TEMPLATE_ATTR_SELECTED_";
 
 // States
 let previousStatement = [];
@@ -50,6 +54,8 @@ const templateMacroAttributes = [];
 const templateCondAttributes = [];
 let templateUseFileName = "";
 const templateAttrClassAttributes = [];
+const templateAttrCheckedAttributes = [];
+const templateAttrSelectedAttributes = [];
 
 /*
  * 
@@ -133,8 +139,18 @@ const checkAttributes = (node) => {
 			attribute.value = 'TEMPLATE_ATTRIBUTE';
 		}
 		else if (attribute.name === "class" && attribute.value.startsWith(TEMPLATE_ATTR_CLASS)) {
-			const templateAttrClassPosition = attribute.value.substring(TEMPLATE_ATTR_CLASS.length);
-			attribute.name = templateAttrClassAttributes[templateAttrClassPosition];
+			const templateAttrPosition = attribute.value.substring(TEMPLATE_ATTR_CLASS.length);
+			attribute.name = templateAttrClassAttributes[templateAttrPosition];
+			attribute.value = 'TEMPLATE_ATTRIBUTE';
+		}
+		else if (attribute.name === "checked" && attribute.value.startsWith(TEMPLATE_ATTR_CHECKED)) {
+			const templateAttrPosition = attribute.value.substring(TEMPLATE_ATTR_CHECKED.length);
+			attribute.name = templateAttrCheckedAttributes[templateAttrPosition];
+			attribute.value = 'TEMPLATE_ATTRIBUTE';
+		}
+		else if (attribute.name === "selected" && attribute.value.startsWith(TEMPLATE_ATTR_SELECTED)) {
+			const templateAttrPosition = attribute.value.substring(TEMPLATE_ATTR_SELECTED.length);
+			attribute.name = templateAttrSelectedAttributes[templateAttrPosition];
 			attribute.value = 'TEMPLATE_ATTRIBUTE';
 		}
 		else if (PRINT_TEMPLO_REGEX.test(attribute.value)) {
@@ -201,30 +217,62 @@ const preConvertAttributes = (fileAsString) => {
 
 	// Get and store the converted Twig cond attribute
 	const useMatch = fileAsString.match(USE_TEMPLO_REGEX);
-	templateUseFileName = useMatch && useMatch[2];
+	if (useMatch) {
+		templateUseFileName = useMatch && useMatch[2];
 	
-	// Replace the Twig use attribute by a template string in an HTML tag
-	const useTemplateString = `<html ${TEMPLATE_USE}='${TEMPLATE_USE}'>`;
-	fileAsString = fileAsString.replace(USE_TEMPLO_REGEX, useTemplateString);
-	const lastEndTemploDirective = fileAsString.match(/::end::(?![\s\S]*::end::)/);
-	fileAsString = fileAsString.replace(/::end::(?![\s\S]*::end::)/, '</html>')
-
+		// Replace the Twig use attribute by a template string in an HTML tag
+		const useTemplateString = `<html ${TEMPLATE_USE}='${TEMPLATE_USE}'>`;
+		fileAsString = fileAsString.replace(USE_TEMPLO_REGEX, useTemplateString);
+		const lastEndTemploDirective = fileAsString.match(/::end::(?![\s\S]*::end::)/);
+		fileAsString = fileAsString.replace(/::end::(?![\s\S]*::end::)/, '</html>')
+	}
+	
 	/* ::attr class */
+	fileAsString = preConvertAttrAttributes(fileAsString, "class");
 
-	const attrClassConvertedTwig = `class={{ $1 ? "$2" : "''"}}`;
-	fileAsString = fileAsString.replace(ATTR_CLASS_TEMPLO_REGEX, attrClassConvertedTwig);
+	/* ::attr checked */
+	fileAsString = preConvertAttrAttributes(fileAsString, "checked");
 
-	// Get and store the converted Twig attr class attribute
-	const attrClassMatches = fileAsString.match(/class={{.*}}/g);
-	attrClassMatches && attrClassMatches.forEach(m => {
-		templateAttrClassAttributes.push(m);
-	})
-	// Replace the Twig cond attribute by a template string
-	templateAttrClassAttributes && templateAttrClassAttributes.forEach((_, i) => {
-		fileAsString = fileAsString.replace(/class={{.*}}/, `class="${TEMPLATE_ATTR_CLASS}${i}"`);
-	})
+	/* ::attr selected */
+	fileAsString = preConvertAttrAttributes(fileAsString, "selected");
 
 	console.log(fileAsString)
+	return fileAsString;
+}
+
+const preConvertAttrAttributes = (fileAsString, attr) => {
+	let template;
+	let attrConvertedTwig;
+	let regex;
+	let templateAttrAttributes;
+	if (attr === "class") {
+		regex = ATTR_CLASS_TEMPLO_REGEX;
+		template = TEMPLATE_ATTR_CLASS;
+		attrConvertedTwig = `class={{ $1 ? "$2" : "''"}}`;
+		templateAttrAttributes = templateAttrClassAttributes;
+	} else if (attr === "checked") {
+		regex = ATTR_CHECKED_TEMPLO_REGEX;
+		template = TEMPLATE_ATTR_CHECKED;
+		attrConvertedTwig = `${attr}={{ $1 }}`;
+		templateAttrAttributes = templateAttrCheckedAttributes;
+	} else if (attr === "selected") {
+		regex = ATTR_SELECTED_TEMPLO_REGEX;
+		template = TEMPLATE_ATTR_SELECTED;
+		attrConvertedTwig = `${attr}={{ $1 }}`;
+		templateAttrAttributes = templateAttrSelectedAttributes;
+	}
+	fileAsString = fileAsString.replace(regex, attrConvertedTwig);
+
+	const attrMatches = fileAsString.match(new RegExp(`${attr}={{.*}}`, 'g'));
+	if (attrMatches) {
+		attrMatches.forEach(m => {
+			templateAttrAttributes.push(m);
+		})
+		templateAttrAttributes && templateAttrAttributes.forEach((_, i) => {
+			fileAsString = fileAsString.replace(new RegExp(`${attr}={{.*}}`), `${attr}="${template}${i}"`);
+		})
+	}
+	
 	return fileAsString;
 }
 
@@ -348,7 +396,10 @@ const fillInTwigMacro = (value) => {
 
 const removeTwigMacroAttributeValues = (string) => {
 	const stringToBeRemoved ='="TEMPLATE_ATTRIBUTE"';
-	return string.replace(stringToBeRemoved, '');
+	while (string.match(stringToBeRemoved)) {
+		string = string.replace(stringToBeRemoved, '');
+	}
+	return string;
 }
 
 const removeDivAroundMacroUsage = (string) => {
@@ -403,6 +454,9 @@ const main = () => {
 
 	// Fill in use/extends template string
 	fileAsString = fillInUseTemplate(fileAsString);
+
+	// Remove remaining double colon
+	fileAsString = removeTemploDoubleColon(fileAsString);
 
 	// The DOM parser will add the xml namespace to the document but we don't want it.
 	fileAsString = fileAsString.replace(' xmlns="http://www.w3.org/1999/xhtml"', '');
