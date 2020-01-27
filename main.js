@@ -22,6 +22,7 @@ const PRINT_TEMPLO_REGEX = /(::)(.*)(::)/g;
 const MACRO_USAGE_TEMPLO_REGEX = /(\$\$)(\w+)(\(.*\))/g;
 const MACRO_ATTR_TEMPLO_REGEX = /(<\w+\s)(\$\$)(\w+)(\(.*\))(.*>)/g
 const COND_TEMPLO_REGEX = /(::cond\s)(.*)(::)/g;
+const ATTR_CLASS_TEMPLO_REGEX = /::attr\sclass\sif\((.*)\)\s+(.*)(::)/g;
 const NOT_TEMPLO_REGEX = /(.*)(!)([^=].*)/g;
 const AND_TEMPLO_REGEX = /(.*)(&&)(.*)/g;
 const OR_TEMPLO_REGEX = /(.*)(\|\|)(.*)/g;
@@ -40,6 +41,7 @@ const BLOCK = "block";
 const TEMPLATE_MACRO = "TEMPLATE_MACRO_";
 const TEMPLATE_COND = "TEMPLATE_COND_";
 const TEMPLATE_USE = "TEMPLATE_USE";
+const TEMPLATE_ATTR_CLASS = "TEMPLATE_ATTR_CLASS_";
 
 // States
 let previousStatement = [];
@@ -47,6 +49,7 @@ let macrosAreImported = false;
 const templateMacroAttributes = [];
 const templateCondAttributes = [];
 let templateUseFileName = "";
+const templateAttrClassAttributes = [];
 
 /*
  * 
@@ -127,7 +130,12 @@ const checkAttributes = (node) => {
 			}
 			const templateMacroAttributePosition = attribute.name.substring(TEMPLATE_MACRO.length);
 			attribute.name = templateMacroAttributes[templateMacroAttributePosition];
-			attribute.value = 'TEMPLATE_MACRO_ATTRIBUTE';
+			attribute.value = 'TEMPLATE_ATTRIBUTE';
+		}
+		else if (attribute.name === "class" && attribute.value.startsWith(TEMPLATE_ATTR_CLASS)) {
+			const templateAttrClassPosition = attribute.value.substring(TEMPLATE_ATTR_CLASS.length);
+			attribute.name = templateAttrClassAttributes[templateAttrClassPosition];
+			attribute.value = 'TEMPLATE_ATTRIBUTE';
 		}
 		else if (PRINT_TEMPLO_REGEX.test(attribute.value)) {
 			attribute.value = convertPrint(attribute.value);
@@ -173,7 +181,7 @@ const preConvertAttributes = (fileAsString) => {
 		fileAsString = fileAsString.replace(p, removeTemploDoubleColon(p));
 	});
 
-	/* :cond */
+	/* ::cond */
 
 	const condAttributeConvertedTwig = "{{ $2 }}";
 	fileAsString = fileAsString.replace(COND_TEMPLO_REGEX, condAttributeConvertedTwig);
@@ -189,7 +197,7 @@ const preConvertAttributes = (fileAsString) => {
 		fileAsString = fileAsString.replace(/(<.*){{.*}}(.*>)/, `$1${TEMPLATE_COND}${i}='${TEMPLATE_COND}${i}'$2`);
 	})
 
-	/* :use */
+	/* ::use */
 
 	// Get and store the converted Twig cond attribute
 	const useMatch = fileAsString.match(USE_TEMPLO_REGEX);
@@ -201,7 +209,22 @@ const preConvertAttributes = (fileAsString) => {
 	const lastEndTemploDirective = fileAsString.match(/::end::(?![\s\S]*::end::)/);
 	fileAsString = fileAsString.replace(/::end::(?![\s\S]*::end::)/, '</html>')
 
-console.log(fileAsString)
+	/* ::attr class */
+
+	const attrClassConvertedTwig = `class={{ $1 ? "$2" : "''"}}`;
+	fileAsString = fileAsString.replace(ATTR_CLASS_TEMPLO_REGEX, attrClassConvertedTwig);
+
+	// Get and store the converted Twig attr class attribute
+	const attrClassMatches = fileAsString.match(/class={{.*}}/g);
+	attrClassMatches && attrClassMatches.forEach(m => {
+		templateAttrClassAttributes.push(m);
+	})
+	// Replace the Twig cond attribute by a template string
+	templateAttrClassAttributes && templateAttrClassAttributes.forEach((_, i) => {
+		fileAsString = fileAsString.replace(/class={{.*}}/, `class="${TEMPLATE_ATTR_CLASS}${i}"`);
+	})
+
+	console.log(fileAsString)
 	return fileAsString;
 }
 
@@ -324,7 +347,7 @@ const fillInTwigMacro = (value) => {
 }
 
 const removeTwigMacroAttributeValues = (string) => {
-	const stringToBeRemoved ='="TEMPLATE_MACRO_ATTRIBUTE"';
+	const stringToBeRemoved ='="TEMPLATE_ATTRIBUTE"';
 	return string.replace(stringToBeRemoved, '');
 }
 
