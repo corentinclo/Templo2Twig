@@ -372,7 +372,7 @@ const convertSwitch = (value) => {
 
 const convertCase = (value) => {
 	const statement = !switchCasePosition ? 'if' : 'elseif';
-	const replacedTwigRegex = `{% ${statement} ${switchCaseCondition}.index === ${switchCasePosition} %}\n$1`;
+	const replacedTwigRegex = `{% ${statement} ${switchCaseCondition}.index == ${switchCasePosition} %}\n$1`;
 	value = value.replace(CASE_TEMPLO_REGEX, replacedTwigRegex);
 	switchCasePosition += 1;
 	return value;
