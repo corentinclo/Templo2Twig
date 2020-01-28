@@ -18,6 +18,8 @@ const RAW_TEMPLO_REGEX = /(::raw\s)(.*)(::)/g;
 const FILL_TEMPLO_REGEX = /(::fill\s)(.*)(::)/g;
 const SET_TEMPLO_REGEX = /(::set\s)(.*)(::)/g;
 const USE_TEMPLO_REGEX = /(::use\s)(.*)(::)/;
+const SWITCH_TEMPLO_REGEX = /::switch\s(.*)::/;
+const CASE_TEMPLO_REGEX = /::case::\s+(.*)/;
 const PRINT_TEMPLO_REGEX = /(::)(.*)(::)/g;
 const MACRO_USAGE_TEMPLO_REGEX = /(\$\$)(\w+)(\(.*\))/g;
 const MACRO_ATTR_TEMPLO_REGEX = /(<\w+\s)(\$\$)(\w+)(\(.*\))(.*>)/g
@@ -34,10 +36,13 @@ const MACROS_START_TAG_TEMPLO = /<macros>/;
 const MACROS_END_TAG_TEMPLO = /<\/macros>/;
 
 // Statement constants
-const IF = "if";
-const FOR = "for";
-const SET = "set";
-const BLOCK = "block";
+const statement = {
+	IF: "if",
+	FOR: "for",
+	SET: "set",
+	BLOCK: "block"
+} 
+
 
 // String templates
 const TEMPLATE_MACRO = "TEMPLATE_MACRO_";
@@ -50,6 +55,8 @@ const TEMPLATE_ATTR_SELECTED = "TEMPLATE_ATTR_SELECTED_";
 // States
 let previousStatement = [];
 let macrosAreImported = false;
+let switchCasePosition = 0;
+let switchCaseCondition = "";
 const templateMacroAttributes = [];
 const templateCondAttributes = [];
 let templateUseFileName = "";
@@ -73,9 +80,16 @@ const convertToTwig = (node) => {
 	}
 
 	if (node.nodeName === '#text') {
+		if (SWITCH_TEMPLO_REGEX.test(node.nodeValue)) {
+			node.nodeValue = convertSwitch(node.nodeValue);
+			previousStatement.push(statement.IF);
+		}
+		if (CASE_TEMPLO_REGEX.test(node.nodeValue)) {
+			node.nodeValue = convertCase(node.nodeValue);
+		}
 		if (IF_TEMPLO_REGEX.test(node.nodeValue)) {
 			convertIf(node);
-			previousStatement.push(IF);
+			previousStatement.push(statement.IF);
 		}
 		else if (ELSEIF_TEMPLO_REGEX.test(node.nodeValue)) {
 			node.nodeValue = convertElseIf(node.nodeValue);
@@ -88,18 +102,18 @@ const convertToTwig = (node) => {
 		}
 		if (FOREACH_TEMPLO_REGEX.test(node.nodeValue)) {
 			node.nodeValue = convertForeach(node.nodeValue);
-			previousStatement.push(FOR);
+			previousStatement.push(statement.FOR);
 		}
 		if (RAW_TEMPLO_REGEX.test(node.nodeValue)) {
 			node.nodeValue = convertRaw(node.nodeValue);
 		}
 		if (FILL_TEMPLO_REGEX.test(node.nodeValue)) {
 			node.nodeValue = convertFill(node.nodeValue);
-			previousStatement.push(SET);
+			previousStatement.push(statement.SET);
 		}
 		if (SET_TEMPLO_REGEX.test(node.nodeValue)) {
 			node.nodeValue = convertSet(node.nodeValue);
-			previousStatement.push(SET);
+			previousStatement.push(statement.SET);
 		}
 		if (PRINT_TEMPLO_REGEX.test(node.nodeValue)) {
 			node.nodeValue = convertPrint(node.nodeValue);
@@ -345,6 +359,23 @@ const convertFill = (value) => {
 const convertSet = (value) => {
 	const replacedTwigRegex = "{% set $2 %}";
 	return value.replace(SET_TEMPLO_REGEX, replacedTwigRegex);
+}
+
+const convertSwitch = (value) => {
+	switchCaseCondition = value.match(SWITCH_TEMPLO_REGEX)[1];
+	switchCasePosition = 0;
+	while (value.match(CASE_TEMPLO_REGEX)) {
+		value = convertCase(value);
+	}
+	return value.replace(SWITCH_TEMPLO_REGEX, "");
+}
+
+const convertCase = (value) => {
+	const statement = !switchCasePosition ? 'if' : 'elseif';
+	const replacedTwigRegex = `{% ${statement} ${switchCaseCondition}.index === ${switchCasePosition} %}\n$1`;
+	value = value.replace(CASE_TEMPLO_REGEX, replacedTwigRegex);
+	switchCasePosition += 1;
+	return value;
 }
 
 const convertPrint = (value) => {
