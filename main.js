@@ -124,10 +124,46 @@ const convertToTwig = (node) => {
 	} else if (node.childNodes) {
 		const array = Array.from(node.childNodes);
 		array.map(child => {
-			convertToTwig(child)
+			// If a node contains several directives, we will seperates each directives into a separated node.
+			const splittedNodes = splitNodeByStatements(child);
+			if (!splittedNodes.length) {
+				convertToTwig(child);
+			} else {
+				splittedNodes.forEach(splittedNode => {
+					convertToTwig(splittedNode);
+				})
+				// Reconcat node and return
+				child.nodeValue = splittedNodes.reduce((concatenated, splittedNode) => `${concatenated}${splittedNode.nodeValue}`, '');
+				child.data = child.nodeValue;
+			}
 		})
 	}
 	node.data = node.nodeValue;
+}
+
+const splitNodeByStatements = (node) => {
+	if (!node.nodeValue) {
+		return [];
+	}
+	const splittedNodes = [];
+	let split = node.nodeValue.match(/.+?(?=::(foreach|if|set))(.*)/s);
+	splittedNodes.push(node);
+	split = split && split[2];
+	while (split) {
+		const splittedNode = doc.createTextNode(split);
+		splittedNodes.push(splittedNode);
+		split = split.match(/.+?(?=::(foreach|if|set))(.*)/s)
+		split = split && split[2];
+	}
+
+	splittedNodes.forEach((node, i) => {
+		if (i === splittedNodes.length - 1) {
+			return;
+		}
+		node.nodeValue = node.nodeValue.replace(splittedNodes[i+1].nodeValue, '');
+		node.data = node.nodeValue;
+	})
+	return splittedNodes;
 }
 
 /*
@@ -497,7 +533,7 @@ const main = () => {
 
 // JS
 const client = new XMLHttpRequest();
-client.open('GET', '/t.templo');
+client.open('GET', '/file.templo');
 client.onreadystatechange = function(e) {
 	if (e.currentTarget.readyState !== 4) {
 		return
