@@ -15,6 +15,7 @@ const ELSE_TEMPLO_REGEX = /::else::/g;
 const END_TEMPLO_REGEX = /::end::/;
 const FOREACH_TEMPLO_REGEX = /(::foreach\s)(.*)(\s)(.*)(::)/g;
 const RAW_TEMPLO_REGEX = /(::raw\s)(.*)(::)/g;
+const RAW_CONTENT_TEMPLO_REGEX = /::raw\s__content__::/g
 const FILL_TEMPLO_REGEX = /(::fill\s)(.*)(::)/g;
 const SET_TEMPLO_REGEX = /(::set\s)(.*)(::)/g;
 const USE_TEMPLO_REGEX = /(::use\s)(.*)(::)/;
@@ -103,6 +104,9 @@ const convertToTwig = (node) => {
 		if (FOREACH_TEMPLO_REGEX.test(node.nodeValue)) {
 			node.nodeValue = convertForeach(node.nodeValue);
 			previousStatement.push(statement.FOR);
+		}
+		if (RAW_CONTENT_TEMPLO_REGEX.test(node.nodeValue)) {
+			node.nodeValue = convertRawContent(node.nodeValue);
 		}
 		if (RAW_TEMPLO_REGEX.test(node.nodeValue)) {
 			node.nodeValue = convertRaw(node.nodeValue);
@@ -382,8 +386,13 @@ const convertForeach = (value) => {
 	return value.replace(FOREACH_TEMPLO_REGEX, replacedTwigRegex);
 }
 
-const convertRaw = (value) => {
+const convertRawContent = (value) => {
 	const replacedTwigRegex = "{% block $2 %}{% endblock %}";
+	return value.replace(RAW_CONTENT_TEMPLO_REGEX, replacedTwigRegex);
+}
+
+const convertRaw = (value) => {
+	const replacedTwigRegex = "{{ $2|raw }}";
 	return value.replace(RAW_TEMPLO_REGEX, replacedTwigRegex);
 }
 
