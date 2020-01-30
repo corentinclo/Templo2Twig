@@ -23,7 +23,7 @@ const SWITCH_TEMPLO_REGEX = /::switch\s(.*)::/;
 const CASE_TEMPLO_REGEX = /::case::\s+(.*)/;
 const PRINT_TEMPLO_REGEX = /(::)(.*)(::)/g;
 const MACRO_USAGE_TEMPLO_REGEX = /(\$\$)(\w+)(\(.*\))/g;
-const MACRO_ATTR_TEMPLO_REGEX = /(<\w+\s)(\$\$)(\w+)(\(.*\))(.*>)/g
+const MACRO_ATTR_TEMPLO_REGEX = /(<\w+\s)(\w+(=".*")*\s)*(\$\$)(\w+)(\(.*\))(.*>)/g
 const COND_TEMPLO_REGEX = /(::cond\s)(.*)(::)/g;
 const ATTR_CLASS_TEMPLO_REGEX = /::attr\sclass\sif\((.*)\)\s+(.*)(::>)/g;
 const ATTR_CHECKED_TEMPLO_REGEX = /::attr\schecked\s\((.*)\)::/g;
@@ -228,7 +228,7 @@ const convertCondAttribute = (node, condAttribute, condition) => {
 const preConvertAttributes = (fileAsString) => {
 	/* MACRO */
 
-	const macroAttrConvertedTwig = "$1{{ macros.$3$4 }}$5";
+	const macroAttrConvertedTwig = "$1$2{{ macros.$5$6 }}$7";
 	const macroUsageConvertedTwig = "<div macro> {{ macros.$2$3 }} </div>";
 	fileAsString = fileAsString.replace(MACRO_ATTR_TEMPLO_REGEX, macroAttrConvertedTwig);
 	fileAsString = fileAsString.replace(MACRO_USAGE_TEMPLO_REGEX, macroUsageConvertedTwig);
