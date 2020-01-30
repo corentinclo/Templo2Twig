@@ -537,19 +537,6 @@ const main = () => {
     fileAsString = fileAsString.replace(' xmlns="http://www.w3.org/1999/xhtml"', '');
 }
 
-// JS
-// const client = new XMLHttpRequest();
-// client.open('GET', '/file.templo');
-// client.onreadystatechange = function(e) {
-//  if (e.currentTarget.readyState !== 4) {
-//      return
-//  }
-//   fileAsString = client.responseText;
-
-//   main()
-// }
-// client.send();
-
 function getArgs () {
     const args = {};
     process.argv
@@ -593,10 +580,7 @@ fs.readdir(inputDirectoryPath, function (err, files) {
             return;
         }
         console.log('\n ------ \nFound Templo file: ', fileName);
-        fileAsString = bufferFile(fileName);
-        function bufferFile(relPath) {
-            return fs.readFileSync(path.join(__dirname, relPath), { encoding: 'utf8' });
-        }
+        fileAsString = fs.readFileSync(`${inputDirectoryPath}/${fileName}`, { encoding: 'utf8' });
 
         console.log('Converting Templo file...');
         main();
