@@ -588,7 +588,7 @@ fs.readdir(inputDirectoryPath, function (err, files) {
     } 
     files.forEach(function (fileName) {
         // Do whatever you want to do with the file
-        const indexOfTemploExtension = fileName.indexOf(".templo");
+        const indexOfTemploExtension = fileName.indexOf(".mtt");
         if (indexOfTemploExtension === -1) {
             return;
         }
@@ -601,7 +601,7 @@ fs.readdir(inputDirectoryPath, function (err, files) {
         console.log('Converting Templo file...');
         main();
 
-        const twigFileName = fileName.replace(".templo", ".twig");
+        const twigFileName = fileName.replace(".mtt", ".twig");
         const outputFilePath = `${outputDirectoryPath}/${twigFileName}`;
         // We make sure output directory exists
         fs.mkdirSync(outputDirectoryPath, { recursive: true })
