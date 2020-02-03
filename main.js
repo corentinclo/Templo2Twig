@@ -28,6 +28,7 @@ const COND_TEMPLO_REGEX = /(::cond\s)(.*?)(::)/g;
 const ATTR_CLASS_TEMPLO_REGEX = /::attr\sclass\sif\((.*)\)\s+(.*)(::>)/g;
 const ATTR_CHECKED_TEMPLO_REGEX = /::attr\schecked\s\((.*)\)::/g;
 const ATTR_SELECTED_TEMPLO_REGEX = /::attr\sselected\s\((.*)\)::/g;
+const ATTR_TID_VALUE_TEMPLO_REGEX = /::attr\stid_value\s(.*?)::/g;
 const NOT_TEMPLO_REGEX = /(.*)(!)([^=].*)/g;
 const AND_TEMPLO_REGEX = /(.*)(&&)(.*)/g;
 const OR_TEMPLO_REGEX = /(.*)(\|\|)(.*)/g;
@@ -64,6 +65,7 @@ let templateUseFileName = "";
 const templateAttrClassAttributes = [];
 const templateAttrCheckedAttributes = [];
 const templateAttrSelectedAttributes = [];
+const templateAttrTidValueAttributes = [];
 
 /*
  * 
@@ -290,6 +292,9 @@ const preConvertAttributes = (fileAsString) => {
     /* ::attr selected */
     fileAsString = preConvertAttrAttributes(fileAsString, "selected");
 
+    /* ::attr tid_value */
+    fileAsString = preConvertAttrAttributes(fileAsString, "tid_value");
+
     return fileAsString;
 }
 
@@ -313,7 +318,13 @@ const preConvertAttrAttributes = (fileAsString, attr) => {
         template = TEMPLATE_ATTR_SELECTED;
         attrConvertedTwig = `${attr}={{ $1 }}`;
         templateAttrAttributes = templateAttrSelectedAttributes;
+    } else if (attr === "tid_value") {
+        regex = ATTR_TID_VALUE_TEMPLO_REGEX;
+        template = TEMPLATE_ATTR_SELECTED;
+        attrConvertedTwig = `${attr}={{ $1 }}`;
+        templateAttrAttributes = templateAttrTidValueAttributes;
     }
+
     fileAsString = fileAsString.replace(regex, attrConvertedTwig);
 
     const attrMatches = fileAsString.match(new RegExp(`${attr}={{.*}}`, 'g'));
@@ -454,7 +465,12 @@ const importMacros = (node) => {
     const importMacrosNode = doc.createTextNode("\n{% import 'macros.html' as macros %}")
     const body = node.ownerDocument.getElementsByTagName("body")[0];
     if (!body) {
-        const firstChild = node.ownerDocument.firstChild;
+        let firstChild = node.ownerDocument.firstChild;
+        if (firstChild.childNodes === null) {
+            while (firstChild.childNodes === null && firstChild.nextSibling) {
+                firstChild = firstChild.nextSibling;
+            }
+        }
         firstChild.insertBefore(importMacrosNode, firstChild.firstChild);
     } else {
         body.insertBefore(importMacrosNode, body.firstChild);
@@ -572,9 +588,8 @@ console.log(`Will scan ${inputDirectoryPath} for Templo files.`)
 fs.readdir(inputDirectoryPath, function (err, files) {
     if (err) {
         return console.log('Unable to scan directory: ' + err);
-    } 
+    }
     files.forEach(function (fileName) {
-        // Do whatever you want to do with the file
         const indexOfTemploExtension = fileName.indexOf(".mtt");
         if (indexOfTemploExtension === -1) {
             return;
