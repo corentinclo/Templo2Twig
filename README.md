@@ -13,4 +13,4 @@ npm install
 ```bash
 node main.js --input=templo --output=twig
 ```
-Where `templo` is a folder containing Templo files, and `Twig` the folder that will contain converted Twig files.
+Where `templo` is a the relative path to the folder containing Templo files, and `Twig` the relative path to the folder that will contain converted Twig files.
