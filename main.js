@@ -25,7 +25,7 @@ const PRINT_TEMPLO_REGEX = /(::)(.*)(::)/g;
 const MACRO_USAGE_TEMPLO_REGEX = /(\$\$)(\w+)(\(.*\))/g;
 const MACRO_ATTR_TEMPLO_REGEX = /(<\w+\s)(\w+(=".*")*\s)*(\$\$)(\w+)(\(.*\))(.*>)/g
 const COND_TEMPLO_REGEX = /(::cond\s)(.*?)(::)/g;
-const ATTR_CLASS_TEMPLO_REGEX = /::attr\sclass\sif\((.*)\)\s+(.*)(::>)/g;
+const ATTR_CLASS_TEMPLO_REGEX = /::attr\sclass\sif\((.*)\)\s+(.*?)(::)/g;
 const ATTR_CHECKED_TEMPLO_REGEX = /::attr\schecked\s\((.*)\)::/g;
 const ATTR_SELECTED_TEMPLO_REGEX = /::attr\sselected\s\((.*)\)::/g;
 const ATTR_TID_VALUE_TEMPLO_REGEX = /::attr\stid_value\s(.*?)::/g;
