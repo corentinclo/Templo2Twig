@@ -585,28 +585,76 @@ const outputDirectoryPath = path.join(__dirname, outputDirectory);
 
 console.log(`Will scan ${inputDirectoryPath} for Templo files.`)
 
-fs.readdir(inputDirectoryPath, function (err, files) {
-    if (err) {
-        return console.log('Unable to scan directory: ' + err);
+const isDirectory = p => fs.statSync(p).isDirectory();
+const getDirectories = p => {
+	const names = fs.readdirSync(p);
+	const directories = [];
+	names.forEach(name => {
+		if (isDirectory(path.join(p, name))){
+			directories.push(name)
+		}
+	})
+   	return directories;
+}
+
+const isFile = p => fs.statSync(p).isFile();  
+const getFiles = p => {
+	const names = fs.readdirSync(p);
+	const files = [];
+	names.forEach(name => {
+		if (isFile(path.join(p, name))){
+			files.push(name)
+		}
+	})
+   	return files;
+}
+
+const convertFilesRecursively = (folder = "", inputBase = inputDirectoryPath, outputBase = outputDirectoryPath) => {
+    // Convert files in this directory
+    const baseLastChar = inputBase.charAt(inputBase.length - 1);
+    if (baseLastChar !== '/') {
+    	inputBase += '/';
     }
+    const inputPath = `${inputBase}${folder}`;
+    const outputBaseLastChar = outputBase.charAt(outputBase.length - 1);
+    if (outputBaseLastChar !== '/') {
+    	outputBase += '/';
+    }
+    const outputPath = `${outputBase}${folder}`;
+    const files = getFiles(inputPath);
     files.forEach(function (fileName) {
         const indexOfTemploExtension = fileName.indexOf(".mtt");
         if (indexOfTemploExtension === -1) {
             return;
         }
         console.log('\n ------ \nFound Templo file: ', fileName);
-        fileAsString = fs.readFileSync(`${inputDirectoryPath}/${fileName}`, { encoding: 'utf8' });
+        fileAsString = fs.readFileSync(`${inputPath}/${fileName}`, { encoding: 'utf8' });
 
         console.log('Converting Templo file...');
         main();
 
         const twigFileName = fileName.replace(".mtt", ".twig");
-        const outputFilePath = `${outputDirectoryPath}/${twigFileName}`;
+        const outputPathLastChar = outputPath.charAt(outputPath.length - 1);
+        let outputFilePath;
+	    if (outputBaseLastChar === '/') {
+	    	outputFilePath = `${outputPath}${twigFileName}`;
+	    } else {
+	    	outputFilePath = `${outputPath}/${twigFileName}`;
+	    }
         // We make sure output directory exists
-        fs.mkdirSync(outputDirectoryPath, { recursive: true })
+        fs.mkdirSync(outputPath, { recursive: true })
         fs.writeFile(outputFilePath, fileAsString, (err) => {
               if (err) throw err;
               console.log('\nThe converted Twig file has been saved to', outputFilePath);
             });
-        });
-});
+     });
+
+    // Convert files in recursive directories
+    let dirs = getDirectories(inputPath);
+    dirs.forEach(dir => {
+    	convertFilesRecursively(dir, inputPath, outputPath);
+    })
+
+};
+
+convertFilesRecursively()
