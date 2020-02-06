@@ -636,7 +636,7 @@ const convertFilesRecursively = (folder = "", inputBase = inputDirectoryPath, ou
         const twigFileName = fileName.replace(".mtt", ".twig");
         const outputPathLastChar = outputPath.charAt(outputPath.length - 1);
         let outputFilePath;
-	    if (outputBaseLastChar === '/') {
+	    if (outputPathLastChar === '/') {
 	    	outputFilePath = `${outputPath}${twigFileName}`;
 	    } else {
 	    	outputFilePath = `${outputPath}/${twigFileName}`;
