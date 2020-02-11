@@ -9,8 +9,8 @@ const path = require('path');
  *
  */
 
-const IF_TEMPLO_REGEX = /(::if\s)(.*?)(::)/g;
-const ELSEIF_TEMPLO_REGEX = /(::elseif\s)(.*?)(::)/g;
+const IF_TEMPLO_REGEX = /(::if[\s(])(.*?)[)]{0,1}(::)/g;
+const ELSEIF_TEMPLO_REGEX = /(::elseif[\s(])(.*?)[)]{0,1}(::)/g;
 const ELSE_TEMPLO_REGEX = /::else::/g;
 const END_TEMPLO_REGEX = /::end::/;
 const FOREACH_TEMPLO_REGEX = /(::foreach\s)(.*)(\s)(.*?)(::)/g;
@@ -24,7 +24,7 @@ const CASE_TEMPLO_REGEX = /::case::\s+(.*)/;
 const PRINT_TEMPLO_REGEX = /(::)(.*?)(::)/g;
 const MACRO_USAGE_TEMPLO_REGEX = /(\$\$)(\w+)(\(.*\))/g;
 const MACRO_ATTR_TEMPLO_REGEX = /(<\w+\s)(\w+(=".*")*\s)*(\$\$)(\w+)(\(.*\))(.*>)/g
-const COND_TEMPLO_REGEX = /(::cond\s)(.*?)(::)/g;
+const COND_TEMPLO_REGEX = /(::cond[\s(])(.*?)[)]{0,1}(::)/g;
 const ATTR_CLASS_TEMPLO_REGEX = /::attr\sclass\sif\((.*)\)\s+(.*?)(::)/g;
 const ATTR_CHECKED_TEMPLO_REGEX = /::attr\schecked\s\((.*)\)::/g;
 const ATTR_SELECTED_TEMPLO_REGEX = /::attr\sselected\s\((.*)\)::/g;
@@ -77,7 +77,7 @@ const convertToTwig = (node) => {
     if (!node) {
         return
     }
-
+    
     if (node.attributes) {
         checkAttributes(node);
     }
@@ -91,21 +91,27 @@ const convertToTwig = (node) => {
             node.nodeValue = convertCase(node.nodeValue);
         }
         if (IF_TEMPLO_REGEX.test(node.nodeValue)) {
+            const matches = node.nodeValue.match(IF_TEMPLO_REGEX);
             convertIf(node);
-            previousStatement.push(statement.IF);
+            for (var i = matches.length - 1; i >= 0; i--) {
+                previousStatement.push(statement.IF);
+            }
         }
-        else if (ELSEIF_TEMPLO_REGEX.test(node.nodeValue)) {
+        if (ELSEIF_TEMPLO_REGEX.test(node.nodeValue)) {
             node.nodeValue = convertElseIf(node.nodeValue);
         }
-        else if (ELSE_TEMPLO_REGEX.test(node.nodeValue)) {
+        if (ELSE_TEMPLO_REGEX.test(node.nodeValue)) {
             node.nodeValue = convertElse(node.nodeValue);
         }
-        else if (END_TEMPLO_REGEX.test(node.nodeValue)) {
+        if (END_TEMPLO_REGEX.test(node.nodeValue)) {
             node.nodeValue = convertEnd(node.nodeValue);
         }
         if (FOREACH_TEMPLO_REGEX.test(node.nodeValue)) {
+            const matches = node.nodeValue.match(FOREACH_TEMPLO_REGEX);
             node.nodeValue = convertForeach(node.nodeValue);
-            previousStatement.push(statement.FOR);
+            for (var i = matches.length - 1; i >= 0; i--) {
+                previousStatement.push(statement.FOR);
+            }
         }
         if (RAW_CONTENT_TEMPLO_REGEX.test(node.nodeValue)) {
             node.nodeValue = convertRawContent(node.nodeValue);
@@ -119,12 +125,12 @@ const convertToTwig = (node) => {
         }
         if (SET_TEMPLO_REGEX.test(node.nodeValue)) {
             node.nodeValue = convertSet(node.nodeValue);
-            previousStatement.push(statement.SET);
         }
         if (PRINT_TEMPLO_REGEX.test(node.nodeValue)) {
             node.nodeValue = convertPrint(node.nodeValue);
         }
         if (node.nodeValue.includes(TEMPLATE_MACRO)) {
+
             node.nodeValue = fillInTwigMacro(node.nodeValue);
         }
     } else if (node.childNodes) {
@@ -504,7 +510,21 @@ const convertMacroDefinitions = (fileAsString) => {
     fileAsString = fileAsString.replace(MACRO_END_TAG_TEMPLO, "{% endmacro %}")
     fileAsString = fileAsString.replace(MACROS_START_TAG_TEMPLO, "")
     fileAsString = fileAsString.replace(MACROS_END_TAG_TEMPLO, "")
-    fileAsString = convertPrint(fileAsString)
+
+    let macroNodes = fileAsString.match(/{% macro .*? %}(.*?){% endmacro %}/gs)
+
+    macroNodes = macroNodes.map(macroNode => {
+        const regex = /({% macro .*? %})(.*?)({% endmacro %})/s;
+        let macroContentNode = macroNode.match(regex)[2];
+        macroContentNode = preConvertAttributes(macroContentNode);
+        doc = parser.parseFromString(macroContentNode, "text/html");
+        doc.childNodes = Array.from(doc.childNodes).map(convertToTwig);
+        const serializer = new XMLSerializer();
+        const convertedMacroNode = serializer.serializeToString(doc);
+        return macroNode.replace(regex, `$1${convertedMacroNode}$3`);
+    })
+
+    fileAsString = macroNodes.join('\n\n')
 
     return fileAsString;
 }
@@ -522,7 +542,6 @@ const main = () => {
 
     if (fileAsString.startsWith("<macros>")) {
         fileAsString = convertMacroDefinitions(fileAsString);
-
     } else {
         // Because the DOM parser won't recognize Templo attributes such as macros and ::cond, it will ignore them during the parsing.
         // That's why we need to convert them into a template string before to start the DOM parsing. Then the DOM parsing will properly
@@ -532,11 +551,11 @@ const main = () => {
         doc = parser.parseFromString(fileAsString, "text/html");
 
         doc.childNodes = Array.from(doc.childNodes).map(convertToTwig);
-    }
 
-    // Convert Document back to string
-    const serializer = new XMLSerializer();
-    fileAsString = serializer.serializeToString(doc);
+        // Convert Document back to string
+        const serializer = new XMLSerializer();
+        fileAsString = serializer.serializeToString(doc);
+    }
 
     // Remove Twig macro attributes
     fileAsString = removeTwigMacroAttributeValues(fileAsString);
@@ -550,8 +569,10 @@ const main = () => {
     // Remove remaining double colon
     fileAsString = removeTemploDoubleColon(fileAsString);
 
+    console.log(fileAsString)
+
     // The DOM parser will add the xml namespace to the document but we don't want it.
-    fileAsString = fileAsString.replace(' xmlns="http://www.w3.org/1999/xhtml"', '');
+    fileAsString = fileAsString.replace(/ xmlns="http:\/\/www\.w3\.org\/1999\/xhtml"/g, '');
 
     // Reset states
     previousStatement.length = 0;
