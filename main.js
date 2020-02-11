@@ -55,7 +55,7 @@ const TEMPLATE_ATTR_CHECKED = "TEMPLATE_ATTR_CHECKED_";
 const TEMPLATE_ATTR_SELECTED = "TEMPLATE_ATTR_SELECTED_";
 
 // States
-let previousStatement = [];
+const previousStatement = [];
 let macrosAreImported = false;
 let switchCasePosition = 0;
 let switchCaseCondition = "";
@@ -495,7 +495,7 @@ const removeTwigMacroAttributeValues = (string) => {
 }
 
 const removeDivAroundMacroUsage = (string) => {
-    const divAroundMacroUsageRegex = /<div\smacro="macro">\s({{\smacros.insert(.*)\s}})\s<\/div>/g;
+    const divAroundMacroUsageRegex = /<div\smacro="macro">\s({{\smacros.\w(.*?)\s}})\s<\/div>/g;
     return string.replace(divAroundMacroUsageRegex, '$1');
 }
 
@@ -552,6 +552,19 @@ const main = () => {
 
     // The DOM parser will add the xml namespace to the document but we don't want it.
     fileAsString = fileAsString.replace(' xmlns="http://www.w3.org/1999/xhtml"', '');
+
+    // Reset states
+    previousStatement.length = 0;
+    macrosAreImported = false;
+    switchCasePosition = 0;
+    switchCaseCondition = "";
+    templateMacroAttributes.length = 0;
+    templateCondAttributes.length = 0;
+    templateUseFileName = "";
+    templateAttrClassAttributes.length = 0;
+    templateAttrCheckedAttributes.length = 0;
+    templateAttrSelectedAttributes.length = 0;
+    templateAttrTidValueAttributes.length = 0;
 }
 
 function getArgs () {
