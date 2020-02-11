@@ -9,19 +9,19 @@ const path = require('path');
  *
  */
 
-const IF_TEMPLO_REGEX = /(::if\s)(.*)(::)/g;
-const ELSEIF_TEMPLO_REGEX = /(::elseif\s)(.*)(::)/g;
+const IF_TEMPLO_REGEX = /(::if\s)(.*?)(::)/g;
+const ELSEIF_TEMPLO_REGEX = /(::elseif\s)(.*?)(::)/g;
 const ELSE_TEMPLO_REGEX = /::else::/g;
 const END_TEMPLO_REGEX = /::end::/;
-const FOREACH_TEMPLO_REGEX = /(::foreach\s)(.*)(\s)(.*)(::)/g;
-const RAW_TEMPLO_REGEX = /(::raw\s)(.*)(::)/g;
+const FOREACH_TEMPLO_REGEX = /(::foreach\s)(.*)(\s)(.*?)(::)/g;
+const RAW_TEMPLO_REGEX = /(::raw\s)(.*?)(::)/g;
 const RAW_CONTENT_TEMPLO_REGEX = /::raw\s__content__::/g
-const FILL_TEMPLO_REGEX = /(::fill\s)(.*)(::)/g;
-const SET_TEMPLO_REGEX = /(::set\s)(.*)(::)/g;
-const USE_TEMPLO_REGEX = /(::use\s)(.*)(::)/;
-const SWITCH_TEMPLO_REGEX = /::switch\s(.*)::/;
+const FILL_TEMPLO_REGEX = /(::fill\s)(.*?)(::)/g;
+const SET_TEMPLO_REGEX = /(::set\s)(.*?)(::)/g;
+const USE_TEMPLO_REGEX = /(::use\s)(.*?)(::)/;
+const SWITCH_TEMPLO_REGEX = /::switch\s(.*?)::/;
 const CASE_TEMPLO_REGEX = /::case::\s+(.*)/;
-const PRINT_TEMPLO_REGEX = /(::)(.*)(::)/g;
+const PRINT_TEMPLO_REGEX = /(::)(.*?)(::)/g;
 const MACRO_USAGE_TEMPLO_REGEX = /(\$\$)(\w+)(\(.*\))/g;
 const MACRO_ATTR_TEMPLO_REGEX = /(<\w+\s)(\w+(=".*")*\s)*(\$\$)(\w+)(\(.*\))(.*>)/g
 const COND_TEMPLO_REGEX = /(::cond\s)(.*?)(::)/g;
@@ -435,7 +435,8 @@ const convertCase = (value) => {
 
 const convertPrint = (value) => {
     const replacedTwigRegex = "{{$2}}";
-    return value.replace(PRINT_TEMPLO_REGEX, replacedTwigRegex);
+    let r =  value.replace(PRINT_TEMPLO_REGEX, replacedTwigRegex);
+    return r
 }
 
 /*
