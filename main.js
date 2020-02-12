@@ -23,7 +23,8 @@ const SWITCH_TEMPLO_REGEX = /::switch\s(.*?)::/;
 const CASE_TEMPLO_REGEX = /::case::\s+(.*)/;
 const PRINT_TEMPLO_REGEX = /(::)(.*?)(::)/g;
 const MACRO_USAGE_TEMPLO_REGEX = /(\$\$)(\w+)(\(.*\))/g;
-const MACRO_ATTR_TEMPLO_REGEX = /(<\w+\s)(\w+(=".*")*\s)*(\$\$)(\w+)(\(.*\))(.*>)/g
+const MACRO_IN_ATTR_VALUE_TEMPLO_REGEX = /(\w+=\".*?)(\$\$)(\w+)(\(.*?\))(\")/g;
+const MACRO_ATTR_TEMPLO_REGEX = /(<\w+\s)(\w+(=".*")*\s)*(\$\$)(\w+)(\(.*?\))(.*?>)/g
 const COND_TEMPLO_REGEX = /(::cond[\s(])(.*?)[)]{0,1}(::)/g;
 const ATTR_CLASS_TEMPLO_REGEX = /::attr\sclass\sif\((.*)\)\s+(.*?)(::)/g;
 const ATTR_CHECKED_TEMPLO_REGEX = /::attr\schecked\s\((.*)\)::/g;
@@ -36,6 +37,8 @@ const MACRO_START_TAG_TEMPLO = /<macro name=\"(.+)\">/g;
 const MACRO_END_TAG_TEMPLO = /<\/macro>/g;
 const MACROS_START_TAG_TEMPLO = /<macros>/;
 const MACROS_END_TAG_TEMPLO = /<\/macros>/;
+const MACRO_SELF_CLOSING_TAG_TEMPLO = /<macro name=\"(.+?)\"(\s(\w+=\".+\"))+\/>/g;
+
 
 // Statement constants
 const statement = {
@@ -237,8 +240,12 @@ const preConvertAttributes = (fileAsString) => {
     /* MACRO */
 
     const macroAttrConvertedTwig = "$1$2{{ macros.$5$6 }}$7";
-    const macroUsageConvertedTwig = "<div macro> {{ macros.$2$3 }} </div>";
     fileAsString = fileAsString.replace(MACRO_ATTR_TEMPLO_REGEX, macroAttrConvertedTwig);
+
+    const macroInAttrValueConvertedTwig = "$1macros.$3$4$5";
+    fileAsString = fileAsString.replace(MACRO_IN_ATTR_VALUE_TEMPLO_REGEX, macroInAttrValueConvertedTwig);
+
+    const macroUsageConvertedTwig = "<div macro> {{ macros.$2$3 }} </div>";
     fileAsString = fileAsString.replace(MACRO_USAGE_TEMPLO_REGEX, macroUsageConvertedTwig);
 
     // Get and store the converted Twig macro attribute
@@ -510,18 +517,25 @@ const convertMacroDefinitions = (fileAsString) => {
     fileAsString = fileAsString.replace(MACRO_END_TAG_TEMPLO, "{% endmacro %}")
     fileAsString = fileAsString.replace(MACROS_START_TAG_TEMPLO, "")
     fileAsString = fileAsString.replace(MACROS_END_TAG_TEMPLO, "")
+    fileAsString = fileAsString.replace(MACRO_SELF_CLOSING_TAG_TEMPLO, "{% macro $1$2 %}{% endmacro %}")
 
     let macroNodes = fileAsString.match(/{% macro .*? %}(.*?){% endmacro %}/gs)
 
     macroNodes = macroNodes.map(macroNode => {
         const regex = /({% macro .*? %})(.*?)({% endmacro %})/s;
         let macroContentNode = macroNode.match(regex)[2];
-        macroContentNode = preConvertAttributes(macroContentNode);
-        doc = parser.parseFromString(macroContentNode, "text/html");
-        doc.childNodes = Array.from(doc.childNodes).map(convertToTwig);
-        const serializer = new XMLSerializer();
-        const convertedMacroNode = serializer.serializeToString(doc);
-        return macroNode.replace(regex, `$1${convertedMacroNode}$3`);
+        if (macroContentNode) {
+            macroContentNode = preConvertAttributes(macroContentNode);
+            doc = parser.parseFromString(macroContentNode, "text/html");
+            doc.childNodes = Array.from(doc.childNodes).map(convertToTwig);
+            const serializer = new XMLSerializer();
+            const convertedMacroNode = serializer.serializeToString(doc);
+            return macroNode.replace(regex, `$1${convertedMacroNode}$3`);
+        } else {
+            return preConvertAttributes(macroNode)
+        }
+        
+        
     })
 
     fileAsString = macroNodes.join('\n\n')
@@ -568,8 +582,6 @@ const main = () => {
 
     // Remove remaining double colon
     fileAsString = removeTemploDoubleColon(fileAsString);
-
-    console.log(fileAsString)
 
     // The DOM parser will add the xml namespace to the document but we don't want it.
     fileAsString = fileAsString.replace(/ xmlns="http:\/\/www\.w3\.org\/1999\/xhtml"/g, '');
